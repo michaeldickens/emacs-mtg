@@ -1,0 +1,16 @@
+#+TITLE: Display Magic: the Gathering cards in Emacs
+
+** Usage
+#+BEGIN_SRC emacs-lisp
+  (add-to-list 'load-path /path/to/mtg.el)
+  (require 'mtg)
+#+END_SRC
+
+This module allows you to define MTG cards in Org Mode using a new type of link prefixed with ~mtg:~. For example:
+
+~[[mtg:Black Lotus]]~
+
+When Org Mode sees a link to an MTG card, it will do the following:
+
+1. If the card is not downloaded yet, download the card by querying the [[https://scryfall.com/][Scryfall]] API for a card with the given name.
+2. When you open the link (using ~org-open-at-point~ or ~C-c C-o~), Emacs displays an image of the card in the minibuffer.
