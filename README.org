@@ -17,6 +17,7 @@ When Org Mode sees a link to an MTG card, it will do the following:
 
 Here's how it looks:
 
+#+attr_html: :width 200px
 [[file:example-grizzly-bears.png]]
 
 By default, card images and data are downloaded to =~/.emacs.d/mtg-cards/=, but you can change this by customizing the variable ~mtg/db-path~.
