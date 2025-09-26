@@ -37,12 +37,25 @@
   :type 'integer
   :group 'mtg)
 
+(defconst mtg/online-only-formats '(alchemy brawl explorer historic)
+  "A list of online-only formats. If #'mtg/get-format returns an
+online-only format, then the displayed image will be the online-only
+version of a card.")
+
 (defcustom mtg/default-format 'standard
   "Preferred MTG format for the purposes of determining card legality.
 mtg.el will try to determine the format from org-mode properties, but
 this value is used if no format is specified."
   :type 'symbol
   :options '(alchemy brawl commander explorer historic legacy modern pauper pionner standard vintage)
+  :group 'mtg)
+
+(defcustom mtg/download-both-versions t
+  "If non-nil, download both the paper version of a card and its online version, prefixed with \"A-\". For example, Scryfall has two separate cards \"Narfi, Betrayer King\" and \"A-Narfi, Betrayer King\" where the \"A-\" version is errata'd to change the cost from 3UB to 2UB.
+
+If this variable is nil, only download and display the paper version. This halves the number of web requests needed, but it will sometimes cause the incorrect version of a card to be displayed."
+  :type 'symbol
+  :options '(nil t)
   :group 'mtg)
 
 (defvar mtg/saved-max-mini-window-height max-mini-window-height
@@ -75,22 +88,31 @@ called."
 
 (defun mtg/get-format ()
   "Get the preferred Magic: the Gathering Format. If the current major mode is org-mode, look for a property called \"MTG_FORMAT\". If it exists, return its value. If it does not exist or if the major mode is not org-mode, instead return mtg/default-format."
-  (or
-   (if (string= "org-mode" major-mode)
-       (org-entry-get (point) "MTG_FORMAT" t)
-     nil)
-   (symbol-name mtg/default-format)))
+  (downcase
+   (or
+    (if (string= "org-mode" major-mode)
+        (org-entry-get (point) "MTG_FORMAT" t)
+      nil)
+    (symbol-name mtg/default-format))))
 
 
 (defun mtg/get-card-path (card-name)
   "Get the file path for the MTG card CARD-NAME, depending on legality. If
 the card is legal in the preferred format, return the path for the card
 image. If it is illegal, return the path for a red-tinted version of the
-image."
+image. If legality could not be determined, the card is assumed to be
+legal."
+  (when (and
+         (member (intern (mtg/get-format)) mtg/online-only-formats)
+         (not (s-starts-with? "A-" card-name)))
+    ;; Online-only cards are prefixed with "A-" and are sometimes different from
+    ;; the paper version.
+    (setq card-name (concat "A-" card-name)))
+
   (let* ((card-info (mtg/load-card-info card-name))
          (legalities (cdr (assoc "legalities" card-info)))
          (legal? (member (cdr (assoc (mtg/get-format) legalities))
-                         '("legal" "restricted"))))
+                         '("legal" "restricted" nil))))
     (if legal?
         (mtg/get-legal-card-path card-name)
       (mtg/get-illegal-card-path card-name))))
@@ -112,8 +134,6 @@ image."
   "Add a red tint to IMAGE-PATH and save to OUTPUT-PATH.
   TINT-STRENGTH defaults to 0.2 (20% tint)."
   (let ((tint-strength (or tint-strength 0.2)))
-    ;; Note: Emacs doesn't have built-in image processing like PIL
-    ;; This is a simplified version using ImageMagick if available
     (if (executable-find "convert")
         (let ((cmd (format "convert \"%s\" -fill \"rgba(255,0,0,%s)\" -colorize %d%% \"%s\""
                            image-path
@@ -144,19 +164,17 @@ image."
            nil))))))
 
 
-(cl-defun mtg/search-card (card-name)
-  "Search for a Magic card by CARD-NAME and download its image.
-  Save the image to the configured root path. If the card is not
-  legal in Historic format, add a red tint to indicate this."
-  (interactive "sCard name:")
-
+(cl-defun mtg/fetch-card-single-version (card-name)
   (let* ((legal-path (mtg/get-legal-card-path card-name))
          (illegal-path (mtg/get-illegal-card-path card-name))
          (query-params (url-build-query-string `(("fuzzy" ,card-name))))
          (api-url (concat "https://api.scryfall.com/cards/named?" query-params))
          (timeout-seconds 3)
          (response-buffer nil)
-         (card-info nil))
+         (card-info nil)
+         (image-uris nil)
+         (image-url nil)
+         )
 
     ;; Ensure the root directory exists
     (unless (file-exists-p mtg/db-path)
@@ -164,42 +182,63 @@ image."
 
     ;; If card already exists, return early
     (when (file-exists-p legal-path)
-      (cl-return-from mtg/search-card))
+      (cl-return-from mtg/fetch-card-single-version))
 
     (message "Downloading %s from Scryfall..." card-name)
     (setq response-buffer (url-retrieve-synchronously api-url t t timeout-seconds))
 
     (when (not response-buffer)
-      (error "Failed to retrieve card data for %s" card-name))
+      (error "Failed to retrieve card info for %s" card-name))
 
     (setq card-info (mtg/parse-json-response response-buffer))
     (kill-buffer response-buffer)
 
     (when (not card-info)
-      (error "Failed to parse card data for %s" card-name))
+      (error "Failed to parse card info for %s" card-name))
+
+    (when (assoc "card_faces" card-info)
+      ;; If multiple cards are returned, take the first one
+      (setq card-info (car (cdr (assoc "card_faces" card-info)))))
 
     (mtg/save-card-info card-name card-info)
 
-    (let* ((legalities (cdr (assoc "legalities" card-info)))
-           (historic-legal (string= (cdr (assoc "historic" legalities)) "legal"))
-           (image-uris (cdr (assoc "image_uris" card-info)))
-           (img-url (cdr (assoc "normal" image-uris))))
+    (setq image-uris (cdr (assoc "image_uris" card-info)))
+    (setq image-url (cdr (assoc "normal" image-uris)))
 
-      (when (not img-url)
-        (error "No image URL found for %s" card-name))
+    (message "image URIs: %s" image-uris)
+    (when (not image-url)
+      (error "No image URL for card: %s" card-name))
 
-      (when (not (url-copy-file img-url legal-path t))
-        (error "Failed to download image from Scryfall: %s" card-name))
+    (when (not (url-copy-file image-url legal-path t))
+      (error "Failed to download image from Scryfall: %s" card-name))
 
-      (mtg/add-red-tint legal-path illegal-path)
+    (mtg/add-red-tint legal-path illegal-path)
 
-      ;; Respect Scryfall rate limiting
-      (sleep-for 0.05))))
+    ;; Respect Scryfall rate limiting
+    (sleep-for 0.05)))
 
+(defun mtg/fetch-card (card-name)
+  "Search for a Magic card by CARD-NAME and download its image and metadata
+from Scryfall. Save the image to the configured path at mtg/db-path."
+  (interactive "sCard name:")
+
+  (mtg/fetch-card-single-version card-name)
+  (when mtg/download-both-versions
+    (let ((card-A-name (concat "A-" card-name)))
+      (condition-case err
+          (mtg/fetch-card-single-version card-A-name)
+        ;; If there was an error trying to fetch the A- version, simply use the
+        ;; regular version. This usually happens because Scryfall does not have
+        ;; an A- version.
+        (error
+         (dolist (func (list #'mtg/get-legal-card-path
+                             #'mtg/get-illegal-card-path
+                             #'mtg/get-card-info-path))
+           (copy-file (funcall func card-name) (funcall func card-A-name) t)))))))
 
 (defun mtg/show-card-at-point (card-name &optional arg)
   "Display a link in the minibuffer as if it as a Magic: the Gathering card."
-  (mtg/search-card card-name)
+  (mtg/fetch-card card-name)
   (condition-case err
       (let* ((card-path (mtg/get-card-path card-name))
              (image (create-image card-path nil nil
@@ -213,16 +252,17 @@ image."
     (error "Could not display image: %s" (error-message-string err))))
 
 
-;; TODO: this requires having custom CSS for 'tooltip-image, which isn't part of
-;; this module
 (defun mtg/card-export (path desc format)
   "Determine how to render MTG cards when exporting org-mode to HTML."
-  (when (eq format 'html)
+  (cond
+   ((eq format 'html)
     (let ((name (or desc path)))
-      (when (not (file-exists-p (mtg/get-card-path name)))
-        (mtg/search-card name))
-      (format "<span class=\"image-tooltip\">%s<span class=\"tooltip-image\"><img src=\"%s\"></span></span>"
-              name (mtg/get-card-path name)))))
+      (mtg/fetch-card name)
+      (format "<span class=\"mtg-tooltip\">%s<span class=\"mtg-tooltip-image\"><img src=\"%s\"></span></span>"
+              name (mtg/get-card-path name))))
+
+   ;; For any other export type, just return the path to the card image file.
+   (t (mtg/get-card-path name))))
 
 
 ;; Treat links starting with "mtg:" as MTG cards.
@@ -232,3 +272,5 @@ image."
                          :face 'org-link)
 
 (provide 'mtg)
+
+;;; mtg.el ends here

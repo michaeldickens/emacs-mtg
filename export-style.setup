@@ -1,0 +1,37 @@
+# -*- mode: org; -*-
+
+#+HTML_HEAD: <style type="text/css">
+#+HTML_HEAD: .mtg-tooltip {
+#+HTML_HEAD:   position: relative;
+#+HTML_HEAD:   display: inline-block;
+#+HTML_HEAD:   cursor: pointer;
+#+HTML_HEAD:   color: #0066cc;
+#+HTML_HEAD:   text-decoration: underline;
+#+HTML_HEAD: }
+#+HTML_HEAD:
+#+HTML_HEAD: .mtg-tooltip .mtg-tooltip-image {
+#+HTML_HEAD:   visibility: hidden;
+#+HTML_HEAD:   position: absolute;
+#+HTML_HEAD:   top: 25px;
+#+HTML_HEAD:   left: 0;
+#+HTML_HEAD:   z-index: 1000;
+#+HTML_HEAD:   opacity: 0;
+#+HTML_HEAD:   transition: opacity 0.15s ease-in-out;
+#+HTML_HEAD:   background: white;
+#+HTML_HEAD:   border: 1px solid #ccc;
+#+HTML_HEAD:   border-radius: 5px;
+#+HTML_HEAD:   padding: 5px;
+#+HTML_HEAD:   box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+#+HTML_HEAD:   width: 400px;
+#+HTML_HEAD: }
+#+HTML_HEAD:
+#+HTML_HEAD: .mtg-tooltip:hover .mtg-tooltip-image {
+#+HTML_HEAD:   visibility: visible;
+#+HTML_HEAD:   opacity: 1;
+#+HTML_HEAD: }
+#+HTML_HEAD:
+#+HTML_HEAD: .mtg-tooltip .mtg-tooltip-image img {
+#+HTML_HEAD:   max-width: 100%;
+#+HTML_HEAD:   height: auto;
+#+HTML_HEAD: }
+#+HTML_HEAD: </style>

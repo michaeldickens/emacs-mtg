@@ -1,14 +1,20 @@
-#+TITLE: Display Magic: the Gathering cards in Emacs
+#+TITLE: Magic: the Gathering in Emacs
 
+Do you like how websites like [[https://magic.gg/][magic.gg]] and [[https://mtg.wiki/][mtg.wiki]] let you hover your mouse over a card name to see a picture of the card? Well, this module replicates that functionality in Emacs.
+
+** Requirements
+For full functionality, you must have [[https://imagemagick.org/][ImageMagick]] installed, but this module still mostly works without it.
 ** Usage
 #+BEGIN_SRC emacs-lisp
   (add-to-list 'load-path /path/to/mtg.el)
   (require 'mtg)
 #+END_SRC
 
-This module allows you to define MTG cards in Org Mode using a new type of link prefixed with ~mtg:~. For example:
+This module allows you to refer to Magic cards in Org Mode using a new type of link prefixed with ~mtg:~. For example:
 
-~[[mtg:Black Lotus]]~
+#+BEGIN_EXAMPLE
+[[mtg:Black Lotus]] might be the strongest card in my collection, but my personal favorite is [[mtg:Grizzly Bears]].
+#+END_EXAMPLE
 
 When Org Mode sees a link to an MTG card, it will do the following:
 
@@ -17,25 +23,38 @@ When Org Mode sees a link to an MTG card, it will do the following:
 
 Here's how it looks:
 
-#+attr_html: :width 200px
 [[file:example-grizzly-bears.png]]
 
 By default, card images and data are downloaded to =~/.emacs.d/mtg-cards/=, but you can change this by customizing the variable ~mtg/db-path~.
+
+Scryfall's API has fuzzy name matching, so for example =[[mtg:blac lotus]]= will still display properly.
 ** Card legality
 Cards are displayed with a red tint if they are illegal in the preferred format. It looks like this:
 
 [[file:example-black-lotus.png]]
 
-The preferred format is "standard" by default, but you can customize it. The global preferred format is determined by the customizable variable ~mtg/default-format~. You can also set file-local or heading-local formats in Org Mode using the ~:MTG_FORMAT:~ property. For example:
+When checking legality, this module uses Standard format by default, but you can customize it by setting the variable ~mtg/default-format~. You can also set file-local or heading-local formats in Org Mode using the ~:MTG_FORMAT:~ property. For example:
 
 #+BEGIN_EXAMPLE
   :PROPERTIES:
   :MTG_FORMAT: standard
   :END:
-  [[mtg:Black Lotus]] will display as illegal here.
+  If you open this link --> [[mtg:Black Lotus]], the card will appear with a red tint because it's illegal in Standard.
   ** My vintage cards
   :PROPERTIES:
   :MTG_FORMAT: vintage
   :END:
-  [[mtg:Black Lotus][Black Lotus]] is legal in Vintage, however.
+  [[mtg:Black Lotus][Black Lotus]] is legal in Vintage, so here it will appear with no tint.
 #+END_EXAMPLE
+
+Note: Adding a red tint requires [[https://imagemagick.org/][ImageMagick]]. If you don't have ImageMagick installed, all cards will be displayed as if they're legal.
+** Exporting to HTML
+If you export Org Mode files to HTML, you can make the MTG card links display images on hover. For this to work, you must include some custom CSS in your Org Mode file.
+
+In this module there is a file called ~export-style.setup~ that includes some custom CSS. To include this custom CSS in Org Mode, put this line at the top of your Org Mode file:
+
+#+BEGIN_EXAMPLE
+#+SETUPFILE: /path/to/export-style.setup
+#+END_EXAMPLE
+
+Then call ~org-export-dispatch~ to export the Org file to HTML.
