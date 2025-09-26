@@ -39,12 +39,14 @@ When checking legality, this module uses Standard format by default, but you can
   :PROPERTIES:
   :MTG_FORMAT: standard
   :END:
-  If you open this link --> [[mtg:Black Lotus]], the card will appear with a red tint because it's illegal in Standard.
+  If you open this link --> [[mtg:Black Lotus]], the card will appear
+  with a red tint because it's illegal in Standard.
   ** My vintage cards
   :PROPERTIES:
   :MTG_FORMAT: vintage
   :END:
-  [[mtg:Black Lotus][Black Lotus]] is legal in Vintage, so here it will appear with no tint.
+  [[mtg:Black Lotus][Black Lotus]] is legal in Vintage, so here it will
+  appear with no tint.
 #+END_EXAMPLE
 
 Note: Adding a red tint requires [[https://imagemagick.org/][ImageMagick]]. If you don't have ImageMagick installed, all cards will be displayed as if they're legal.
