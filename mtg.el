@@ -58,6 +58,17 @@ If this variable is nil, only download and display the paper version. This halve
   :options '(nil t)
   :group 'mtg)
 
+(defcustom mtg/space-efficient-mode nil
+  "If this variable is nil, mtg.el creates four copies of every image. If this variable is non-nil, mtg.el will only create one copy of every image, but some functionality will not work properly. In particular:
+
+1. Cards will display the same regardless of whether they're legal.
+2. For cards with separate paper and online versions, only the paper version will be displayed.
+
+If this variable is nil, only one version of a card will be downloaded even if 'mtg/download-both-versions non-nil. See also the documentation on 'mtg/download-both-versions."
+  :type 'symbol
+  :options '(nil t)
+  :group 'mtg)
+
 (defvar mtg/saved-max-mini-window-height max-mini-window-height
   "Saved value of max-mini-window-height used to reset after calling
 #'mtg/show-card-at-point.")
@@ -103,6 +114,7 @@ image. If it is illegal, return the path for a red-tinted version of the
 image. If legality could not be determined, the card is assumed to be
 legal."
   (when (and
+         (not mtg/space-efficient-mode)
          (member (intern (mtg/get-format)) mtg/online-only-formats)
          (not (s-starts-with? "A-" card-name)))
     ;; Online-only cards are prefixed with "A-" and are sometimes different from
@@ -113,7 +125,7 @@ legal."
          (legalities (cdr (assoc "legalities" card-info)))
          (legal? (member (cdr (assoc (mtg/get-format) legalities))
                          '("legal" "restricted" nil))))
-    (if legal?
+    (if (or legal? mtg/space-efficient-mode)
         (mtg/get-legal-card-path card-name)
       (mtg/get-illegal-card-path card-name))))
 
@@ -223,7 +235,8 @@ from Scryfall. Save the image to the configured path at mtg/db-path."
   (interactive "sCard name:")
 
   (mtg/fetch-card-single-version card-name)
-  (when mtg/download-both-versions
+  (when (and mtg/download-both-versions
+             (not mtg/space-efficient-mode))
     (let ((card-A-name (concat "A-" card-name)))
       (condition-case err
           (mtg/fetch-card-single-version card-A-name)
