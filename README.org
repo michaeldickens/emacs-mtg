@@ -17,12 +17,14 @@ When Org Mode sees a link to an MTG card, it will do the following:
 
 Here's how it looks:
 
+#+attr_html: :width 500px
 [[file:example-grizzly-bears.png]]
 
 By default, card images and data are downloaded to =~/.emacs.d/mtg-cards/=, but you can change this by customizing the variable ~mtg/db-path~.
 ** Card legality
 Cards are displayed with a red tint if they are illegal in the preferred format. It looks like this:
 
+#+attr_html: :width 500px
 [[file:example-black-lotus.png]]
 
 The preferred format is "standard" by default, but you can customize it. The global preferred format is determined by the customizable variable ~mtg/default-format~. You can also set file-local or heading-local formats in Org Mode using the ~:MTG_FORMAT:~ property. For example:
