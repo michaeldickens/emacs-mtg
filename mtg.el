@@ -50,9 +50,6 @@ this value is used if no format is specified."
 #'mtg/show-card-at-point.")
 
 
-(defvar mtg/card-info-alist nil)
-
-
 (defun reset-max-mini-window-height ()
   "Restore the default minibuffer height. This function is used as a hook
 on minibuffer-exit-hook, and it automatically removes itself after being
@@ -92,7 +89,8 @@ image. If it is illegal, return the path for a red-tinted version of the
 image."
   (let* ((card-info (mtg/load-card-info card-name))
          (legalities (cdr (assoc "legalities" card-info)))
-         (legal? (string= "legal" (cdr (assoc (mtg/get-format) legalities)))))
+         (legal? (member (cdr (assoc (mtg/get-format) legalities))
+                         '("legal" "restricted"))))
     (if legal?
         (mtg/get-legal-card-path card-name)
       (mtg/get-illegal-card-path card-name))))

@@ -14,3 +14,27 @@ When Org Mode sees a link to an MTG card, it will do the following:
 
 1. If the card is not downloaded yet, download the card by querying the [[https://scryfall.com/][Scryfall]] API for a card with the given name.
 2. When you open the link (using ~org-open-at-point~ or ~C-c C-o~), Emacs displays an image of the card in the minibuffer.
+
+Here's how it looks:
+
+[[file:example-grizzly-bears.png]]
+
+By default, card images and data are downloaded to =~/.emacs.d/mtg-cards/=, but you can change this by customizing the variable ~mtg/db-path~.
+** Card legality
+Cards are displayed with a red tint if they are illegal in the preferred format. It looks like this:
+
+[[file:example-black-lotus.png]]
+
+The preferred format is "standard" by default, but you can customize it. The global preferred format is determined by the customizable variable ~mtg/default-format~. You can also set file-local or heading-local formats in Org Mode using the ~:MTG_FORMAT:~ property. For example:
+
+#+BEGIN_EXAMPLE
+  :PROPERTIES:
+  :MTG_FORMAT: standard
+  :END:
+  [[mtg:Black Lotus]] will display as illegal here.
+  ** My vintage cards
+  :PROPERTIES:
+  :MTG_FORMAT: vintage
+  :END:
+  [[mtg:Black Lotus][Black Lotus]] is legal in Vintage, however.
+#+END_EXAMPLE
