@@ -58,6 +58,9 @@ If this variable is nil, only download and display the paper version. This halve
   :options '(nil t)
   :group 'mtg)
 
+;; We could make it even more space-efficient by downloading the "small" sized
+;; image instead of "normal" sized, but IMO the text is too blurry on small
+;; images.
 (defcustom mtg/space-efficient-mode nil
   "If this variable is nil, mtg.el creates four copies of every image. If this variable is non-nil, mtg.el will only create one copy of every image, but some functionality will not work properly. In particular:
 
@@ -107,27 +110,51 @@ called."
     (symbol-name mtg/default-format))))
 
 
+(defun mtg/legal? (card-name)
+  (let* ((card-info (mtg/load-card-info card-name))
+         (legalities (cdr (assoc "legalities" card-info)))
+         (legal? (member (cdr (assoc (mtg/get-format) legalities))
+                         '("legal" "restricted" nil))))
+    legal?))
+
+
 (defun mtg/get-card-path (card-name)
   "Get the file path for the MTG card CARD-NAME, depending on legality. If
 the card is legal in the preferred format, return the path for the card
 image. If it is illegal, return the path for a red-tinted version of the
 image. If legality could not be determined, the card is assumed to be
 legal."
-  (when (and
-         (not mtg/space-efficient-mode)
-         (member (intern (mtg/get-format)) mtg/online-only-formats)
-         (not (s-starts-with? "A-" card-name)))
-    ;; Online-only cards are prefixed with "A-" and are sometimes different from
-    ;; the paper version.
-    (setq card-name (concat "A-" card-name)))
+  (let ((online-format? (member (intern (mtg/get-format)) mtg/online-only-formats))
+        (paper-legal? nil)
+        (alchemy-legal? nil)
+        (alchemy-card-name
+         (if (s-starts-with? "A-" card-name)
+             card-name
+           (concat "A-" card-name))))
+    (when (and
+           (not mtg/space-efficient-mode)
+           online-format?)
+      ;; Online-only cards are prefixed with "A-" and are sometimes different from
+      ;; the paper version. A card is legal if either version of it is legal.
+      (setq alchemy-legal? (mtg/legal? alchemy-card-name)))
 
-  (let* ((card-info (mtg/load-card-info card-name))
-         (legalities (cdr (assoc "legalities" card-info)))
-         (legal? (member (cdr (assoc (mtg/get-format) legalities))
-                         '("legal" "restricted" nil))))
-    (if (or legal? mtg/space-efficient-mode)
-        (mtg/get-legal-card-path card-name)
-      (mtg/get-illegal-card-path card-name))))
+    (setq paper-legal? (mtg/legal? card-name))
+
+    ;; Determining legality is a bit complicated because sometimes a revised
+    ;; card gets reverted such that the paper version is now legal online, and
+    ;; the online version isn't legal anywhere. So you have to check both
+    ;; legalities separately.
+    (cond
+     (mtg/space-efficient-mode
+      (mtg/get-legal-card-path card-name))
+     (paper-legal?
+      (mtg/get-legal-card-path card-name))
+     (alchemy-legal?
+      (mtg/get-legal-card-path alchemy-card-name))
+     (online-format?
+      (mtg/get-illegal-card-path alchemy-card-name))
+     (t
+      (mtg/get-illegal-card-path card-name)))))
 
 
 (defun mtg/save-card-info (card-name card-info)
@@ -212,6 +239,16 @@ legal."
       ;; If multiple cards are returned, take the first one
       (setq card-info (car (cdr (assoc "card_faces" card-info)))))
 
+    ;; Save all the card info. Right now, legality is the only piece of info
+    ;; that gets used, but in the future it may be useful to filter cards by
+    ;; rarity or mana value or something.
+    ;;
+    ;; One possible feature is to get the card's true name from card-info and
+    ;; display that rather than displaying whatever the user wrote (which may
+    ;; include typos etc.).
+    ;;
+    ;; Another idea: A function to take a table of cards and add a column with a
+    ;; given property (rarity, cost, etc.).
     (mtg/save-card-info card-name card-info)
 
     (setq image-uris (cdr (assoc "image_uris" card-info)))
@@ -269,13 +306,13 @@ from Scryfall. Save the image to the configured path at mtg/db-path."
   "Determine how to render MTG cards when exporting org-mode to HTML."
   (cond
    ((eq format 'html)
-    (let ((name (or desc path)))
-      (mtg/fetch-card name)
+    (let ((card-name (or desc path)))
+      (mtg/fetch-card card-name)
       (format "<span class=\"mtg-tooltip\">%s<span class=\"mtg-tooltip-image\"><img src=\"%s\"></span></span>"
-              name (mtg/get-card-path name))))
+              card-name (mtg/get-card-path card-name))))
 
    ;; For any other export type, just return the path to the card image file.
-   (t (mtg/get-card-path name))))
+   (t (mtg/get-card-path card-name))))
 
 
 ;; Treat links starting with "mtg:" as MTG cards.
