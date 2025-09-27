@@ -60,3 +60,29 @@ In this module there is a file called ~export-style.setup~ that includes some cu
 #+END_EXAMPLE
 
 Then call ~org-export-dispatch~ to export the Org file to HTML.
+** Table utilities
+mtg.el comes with functions for working with Org Mode tables. The functions assume you have a table where one column contains links to MTG cards, like this:
+
+#+BEGIN_EXAMPLE
+| [[mtg:Black Lotus]]       |
+| [[mtg:Grizzly Bears]]     |
+| [[mtg:Colossal Dreadmaw]] |
+#+END_EXAMPLE
+
+~mtg/table-sort-by-property~ takes a property as a string (such as "name", "rarity", or "color") and sorts the table by looking up that property for each card. This only works if you've already downloaded the card info (which happens when you view the card or export the whole file).
+
+~mtg/table-insert-column~ takes a property as a string and inserts a new column containing that property for each card. For example, calling ~(mtg/table-insert-column "rarity")~ on the table above produces this:
+
+#+BEGIN_EXAMPLE
+| [[mtg:Black Lotus]]       | bonus  |
+| [[mtg:Grizzly Bears]]     | common |
+| [[mtg:Colossal Dreadmaw]] | common |
+#+END_EXAMPLE
+
+If a property is missing, the cell will be left blank. For example, calling ~(mtg/table-insert-column "power")~ produces
+
+| [[mtg:Black Lotus]]       |   |
+| [[mtg:Grizzly Bears]]     | 2 |
+| [[mtg:Colossal Dreadmaw]] | 6 |
+
+You can also call ~mtg/get-property~ to return a property for the card at point.

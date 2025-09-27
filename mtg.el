@@ -239,16 +239,6 @@ legal."
       ;; If multiple cards are returned, take the first one
       (setq card-info (car (cdr (assoc "card_faces" card-info)))))
 
-    ;; Save all the card info. Right now, legality is the only piece of info
-    ;; that gets used, but in the future it may be useful to filter cards by
-    ;; rarity or mana value or something.
-    ;;
-    ;; One possible feature is to get the card's true name from card-info and
-    ;; display that rather than displaying whatever the user wrote (which may
-    ;; include typos etc.).
-    ;;
-    ;; Another idea: A function to take a table of cards and add a column with a
-    ;; given property (rarity, cost, etc.).
     (mtg/save-card-info card-name card-info)
 
     (setq image-uris (cdr (assoc "image_uris" card-info)))
@@ -313,6 +303,154 @@ from Scryfall. Save the image to the configured path at mtg/db-path."
 
    ;; For any other export type, just return the path to the card image file.
    (t (mtg/get-card-path card-name))))
+
+
+(cl-defun mtg/org-table-insert-computed-column (transform-function)
+  "Add a new column to the right of point in an org-mode table.
+For each row, apply TRANSFORM-FUNCTION to the cell contents at point's column
+and insert the result in the new column.
+TRANSFORM-FUNCTION should take a string and return a string."
+  ;; 1. Check if point is on an org-mode table
+  (unless (org-at-table-p)
+    (message "Point is not on an org-mode table")
+    (cl-return-from mtg/org-table-insert-computed-column))
+
+  (let ((current-col (org-table-current-column)))
+    (save-excursion
+      (org-table-goto-column (1+ current-col))
+      (org-table-insert-column)
+
+      (goto-char (org-table-begin))
+      (while (org-at-table-p)
+        ;; Skip horizontal separator lines
+        (unless (org-at-table-hline-p)
+          (let ((cell-content (org-table-get-field current-col)))
+            (org-table-goto-column (1+ current-col))
+            (org-table-get-field (1+ current-col)
+                                 (funcall transform-function
+                                          (string-trim cell-content)))))
+        (forward-line 1))))
+
+  (org-table-align))
+
+
+(defun mtg/get-property (property)
+  "Get property PROPERTY for the MTG card at point, or nil if the property
+value could not be determined.
+
+Examples of valid properties include: name; power; toughness; cmc; colors; rarity; keywords.
+
+There is no simple way to sort by type. There is a \"type_line\" property, but e.g. it treats \"creature\" and \"legendary creature\" as two different things.
+"
+  (interactive "sCard property: ")
+  (save-excursion
+    (when (null (org-element-link-parser))
+      ;; go to start of link
+      (search-backward "[["))
+    (let* ((card-name (org-element-property :path (org-element-link-parser)))
+           (card-info
+            (condition-case nil
+                (mtg/load-card-info card-name)
+              ;; gracefully fail by using an empty alist
+              (error '()))))
+      (cdr (assoc property card-info)))))
+
+
+(defun mtg/table-insert-column (property)
+  "Given an org-mode table with a column of MTG card links, create a new column to the right and fill each cell with property PROPERTY for each respective card.
+
+For more on properties, see #'mtg/get-property.
+
+If the point is not at an org-mode table, do nothing.
+
+If a cell does not contain a link that can be parsed as a known MTG card, leave the respective cell empty."
+  (interactive "sCard property: ")
+  (mtg/org-table-insert-computed-column
+   (lambda (card-link)
+     (with-temp-buffer
+       (insert card-link)
+       (goto-char (point-min))
+       (let ((v (mtg/get-property property)))
+         (format
+          "%s"
+          (cond
+           ((null v) "")
+
+           ;; convert floats to ints if possible
+           ((and (numberp v)
+                 (= v (floor v)))
+            (floor v))
+           (t v))))))))
+
+
+(defun -mtg/single-color-to-num (c)
+  (cond
+   ((string= "W" c) 1)
+   ((string= "U" c) 2)
+   ((string= "B" c) 3)
+   ((string= "R" c) 4)
+   ((string= "G" c) 5)))
+
+
+(defun -mtg/color-to-num (color-list accum)
+  "Convert a list of MTG colors to a number, such that an ordering of the numbers is equivalent to a particular color ordering.
+
+The color ordering is defined as follows:
+
+1. A card with N + 1 colors is always considered greater than a card
+   with N colors.
+2. Cards with multiple colors are sorted first by the first color,
+   then by the second color, etc.
+3. Colors are ordered as Colorless < White < Blue < Black < Red < Green.
+"
+  (if (null color-list)
+      accum
+    (let ((c (car color-list)))
+      (-mtg/color-to-num
+       (cdr color-list)
+       (+ (* 6 accum)
+          (-mtg/single-color-to-num c))))))
+
+
+(defun mtg/table-sort-by-property (property arg)
+  "If point is at an org-table and the current column contains MTG card links, sort the org-table at point according to property PROPERTY of those cards.
+
+For more on properties, see #'mtg/get-property.
+
+If a prefix arg is provided, sort in reverse order.
+"
+  (interactive "sCard property: \nP")
+  (org-table-sort-lines
+   nil
+   (if (equal '(4) arg) ?F ?f)
+
+   ;; get key on which to sort
+   (lambda (cell-content)
+     (with-temp-buffer
+       (insert cell-content)
+       (goto-char (point-min))
+       (let ((k (mtg/get-property property)))
+         ;; convert property value to a sortable value
+         (cond
+          ((string= "rarity" property)
+           (cond
+            ((string= "common" k) 0)
+            ((string= "uncommon" k) 1)
+            ((string= "rare" k) 2)
+            ((string= "mythic" k) 3)
+            ((string= "bonus" k) 4)))
+          ((string= "colors" property)
+           (-mtg/color-to-num (sort k :key #'-mtg/single-color-to-num) 0))
+          ((member property '("power" "toughness"))
+           ;; convert power/toughness to a number. consider "X" to be larger
+           ;; than any number
+           (if (string-search "X" k)
+               99999
+             (string-to-number k)))
+          (t k)))))
+
+   ;; comparison function. assumes both values are the same type
+   #'value<))
 
 
 ;; Treat links starting with "mtg:" as MTG cards.
