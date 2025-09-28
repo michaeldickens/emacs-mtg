@@ -453,11 +453,12 @@ If a prefix arg is provided, sort in reverse order.
    #'value<))
 
 
-;; Treat links starting with "mtg:" as MTG cards.
-(org-link-set-parameters "mtg"
-                         :follow #'mtg/show-card-at-point
-                         :export #'mtg/card-export
-                         :face 'org-link)
+(with-eval-after-load 'org
+  ;; Treat links starting with "mtg:" as MTG cards.
+  (org-link-set-parameters "mtg"
+                           :follow #'mtg/show-card-at-point
+                           :export #'mtg/card-export
+                           :face 'org-link))
 
 (provide 'mtg)
 
