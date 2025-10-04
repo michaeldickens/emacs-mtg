@@ -334,6 +334,12 @@ TRANSFORM-FUNCTION should take a string and return a string."
   (org-table-align))
 
 
+(defmacro mtg/prompt-for-property ()
+  '(completing-read
+    "Card property: "
+    '("mana_cost" "cmc" "type_line" "oracle_text" "power" "toughness" "colors" "color_identity" "keywords" "name" "legalities" "set" "set_name" "set_type" "rarity" "digital" "released_at")))
+
+
 (defun mtg/get-property (property)
   "Get property PROPERTY for the MTG card at point, or nil if the property
 value could not be determined.
@@ -342,7 +348,7 @@ Examples of valid properties include: name; power; toughness; cmc; colors; rarit
 
 There is no simple way to sort by type. There is a \"type_line\" property, but e.g. it treats \"creature\" and \"legendary creature\" as two different things.
 "
-  (interactive "sCard property: ")
+  (interactive (list (mtg/prompt-for-property)))
   (save-excursion
     (when (null (org-element-link-parser))
       ;; go to start of link
@@ -364,7 +370,7 @@ For more on properties, see #'mtg/get-property.
 If the point is not at an org-mode table, do nothing.
 
 If a cell does not contain a link that can be parsed as a known MTG card, leave the respective cell empty."
-  (interactive "sCard property: ")
+  (interactive (list (mtg/prompt-for-property)))
   (mtg/org-table-insert-computed-column
    (lambda (card-link)
      (with-temp-buffer
@@ -419,7 +425,8 @@ For more on properties, see #'mtg/get-property.
 
 If a prefix arg is provided, sort in reverse order.
 "
-  (interactive "sCard property: \nP")
+  (interactive (list (mtg/prompt-for-property)
+                     current-prefix-arg))
   (org-table-sort-lines
    nil
    (if (equal '(4) arg) ?F ?f)
