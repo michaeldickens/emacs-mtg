@@ -324,11 +324,14 @@ TRANSFORM-FUNCTION should take a string and return a string."
       (while (org-at-table-p)
         ;; Skip horizontal separator lines
         (unless (org-at-table-hline-p)
-          (let ((cell-content (org-table-get-field current-col)))
-            (org-table-goto-column (1+ current-col))
-            (org-table-get-field (1+ current-col)
-                                 (funcall transform-function
-                                          (string-trim cell-content)))))
+          (org-table-goto-column (1+ current-col))
+          (condition-case nil
+              (let ((cell-content (org-table-get-field current-col)))
+                (org-table-get-field (1+ current-col)
+                                     (funcall transform-function
+                                              (string-trim cell-content))))
+            ;; on error, leave empty and go to the next column
+            (error nil)))
         (forward-line 1))))
 
   (org-table-align))
