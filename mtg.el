@@ -235,9 +235,15 @@ legal."
     (when (not card-info)
       (error "Failed to parse card info for %s" card-name))
 
-    (when (assoc "card_faces" card-info)
-      ;; If multiple cards are returned, take the first one
-      (setq card-info (car (cdr (assoc "card_faces" card-info)))))
+    ;; TODO: this was wrong, some individual cards have multiple faces. but we
+    ;; do want to disambiguate if we get multiple cards for a search. with below
+    ;; commented out, it handles adventures/omens correctly, but two-sided cards
+    ;; incorrectly
+    ;;
+    ;; (when (assoc "card_faces" card-info)
+    ;; If multiple cards are returned, take the first one
+    ;; (message "Multiple faces: %s" card-info)
+    ;; (setq card-info (car (cdr (assoc "card_faces" card-info)))))
 
     (mtg/save-card-info card-name card-info)
 
