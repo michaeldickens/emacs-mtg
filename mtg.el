@@ -42,12 +42,13 @@
 online-only format, then the displayed image will be the online-only
 version of a card.")
 
-(defcustom mtg/default-format 'standard
+(defcustom mtg/default-format nil
   "Preferred MTG format for the purposes of determining card legality.
 mtg.el will try to determine the format from org-mode properties, but
-this value is used if no format is specified."
+this value is used if no format is specified. If this variable is nil,
+all cards are considered legal."
   :type 'symbol
-  :options '(alchemy brawl commander explorer historic legacy modern pauper pionner standard vintage)
+  :options '(alchemy brawl commander explorer historic legacy modern pauper pionner standard vintage nil)
   :group 'mtg)
 
 (defcustom mtg/download-both-versions t
