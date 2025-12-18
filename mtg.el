@@ -204,6 +204,28 @@ legal."
            nil))))))
 
 
+(defun mtg/fetch-image (card-info legal-path illegal-path &optional side)
+  (setq image-uris (cdr (assoc "image_uris" card-info)))
+  (setq image-url (cdr (assoc "normal" image-uris)))
+
+  (when (not image-url)
+    (error "No image URL for card: %s" card-name))
+
+  (when side
+    (setq legal-path
+          (replace-regexp-in-string "\\.jpg" (concat "-" side ".jpg") legal-path))
+    (setq illegal-path
+          (replace-regexp-in-string "\\.jpg" (concat "-" side ".jpg") illegal-path)))
+
+  (when (not (url-copy-file image-url legal-path t))
+    (error "Failed to download image from Scryfall: %s" card-name))
+
+  (mtg/add-red-tint legal-path illegal-path)
+
+  ;; Respect Scryfall rate limiting
+  (sleep-for 0.05))
+
+
 (cl-defun mtg/fetch-card-single-version (card-name)
   (let* ((legal-path (mtg/get-legal-card-path card-name))
          (illegal-path (mtg/get-illegal-card-path card-name))
@@ -213,8 +235,7 @@ legal."
          (response-buffer nil)
          (card-info nil)
          (image-uris nil)
-         (image-url nil)
-         )
+         (image-url nil))
 
     ;; Ensure the root directory exists
     (unless (file-exists-p mtg/db-path)
@@ -248,24 +269,31 @@ legal."
 
     (mtg/save-card-info card-name card-info)
 
-    (setq image-uris (cdr (assoc "image_uris" card-info)))
-    (setq image-url (cdr (assoc "normal" image-uris)))
+    (cond
+     ((string= "transform" (cdr (assoc "layout" card-info)))
+      (setq card-faces (cdr (assoc "card_faces" card-info)))
+      (setq card-face-1 (car card-faces))
+      (setq card-face-2 (cadr card-faces))
 
-    (message "image URIs: %s" image-uris)
-    (when (not image-url)
-      (error "No image URL for card: %s" card-name))
+      (mtg/fetch-image card-face-1 legal-path illegal-path "front")
+      (mtg/fetch-image card-face-2 legal-path illegal-path "back")
 
-    (when (not (url-copy-file image-url legal-path t))
-      (error "Failed to download image from Scryfall: %s" card-name))
+      (setq stripped-path (replace-regexp-in-string "\\.jpg" "" legal-path))
 
-    (mtg/add-red-tint legal-path illegal-path)
+      (shell-command
+       (format "montage \"%s-front.jpg\" \"%s-back.jpg\" -tile 2x1 -geometry +0+0 \"%s\""
+               stripped-path stripped-path legal-path))
 
-    ;; Respect Scryfall rate limiting
-    (sleep-for 0.05)))
+      (shell-command
+       (format "montage \"%s-illegal-front.jpg\" \"%s-illegal-back.jpg\" -tile 2x1 -geometry +0+0 \"%s\""
+               stripped-path stripped-path illegal-path)))
+
+     (t (mtg/fetch-image card-info legal-path illegal-path)))))
+
 
 (defun mtg/fetch-card (card-name)
   "Search for a Magic card by CARD-NAME and download its image and metadata
-from Scryfall. Save the image to the configured path at mtg/db-path."
+  from Scryfall. Save the image to the configured path at mtg/db-path."
   (interactive "sCard name:")
 
   (mtg/fetch-card-single-version card-name)
@@ -314,9 +342,9 @@ from Scryfall. Save the image to the configured path at mtg/db-path."
 
 (cl-defun mtg/org-table-insert-computed-column (transform-function)
   "Add a new column to the right of point in an org-mode table.
-For each row, apply TRANSFORM-FUNCTION to the cell contents at point's column
-and insert the result in the new column.
-TRANSFORM-FUNCTION should take a string and return a string."
+  For each row, apply TRANSFORM-FUNCTION to the cell contents at point's column
+  and insert the result in the new column.
+  TRANSFORM-FUNCTION should take a string and return a string."
   ;; 1. Check if point is on an org-mode table
   (unless (org-at-table-p)
     (message "Point is not on an org-mode table")
@@ -352,12 +380,12 @@ TRANSFORM-FUNCTION should take a string and return a string."
 
 (defun mtg/get-property (property)
   "Get property PROPERTY for the MTG card at point, or nil if the property
-value could not be determined.
+  value could not be determined.
 
-Examples of valid properties include: name; power; toughness; cmc; colors; rarity; keywords.
+  Examples of valid properties include: name; power; toughness; cmc; colors; rarity; keywords.
 
-There is no simple way to sort by type. There is a \"type_line\" property, but e.g. it treats \"creature\" and \"legendary creature\" as two different things.
-"
+  There is no simple way to sort by type. There is a \"type_line\" property, but e.g. it treats \"creature\" and \"legendary creature\" as two different things.
+  "
   (interactive (list (mtg/prompt-for-property)))
   (save-excursion
     (when (null (org-element-link-parser))
@@ -375,11 +403,11 @@ There is no simple way to sort by type. There is a \"type_line\" property, but e
 (defun mtg/table-insert-column (property)
   "Given an org-mode table with a column of MTG card links, create a new column to the right and fill each cell with property PROPERTY for each respective card.
 
-For more on properties, see #'mtg/get-property.
+  For more on properties, see #'mtg/get-property.
 
-If the point is not at an org-mode table, do nothing.
+  If the point is not at an org-mode table, do nothing.
 
-If a cell does not contain a link that can be parsed as a known MTG card, leave the respective cell empty."
+  If a cell does not contain a link that can be parsed as a known MTG card, leave the respective cell empty."
   (interactive (list (mtg/prompt-for-property)))
   (mtg/org-table-insert-computed-column
    (lambda (card-link)
@@ -411,14 +439,14 @@ If a cell does not contain a link that can be parsed as a known MTG card, leave 
 (defun -mtg/color-to-num (color-list accum)
   "Convert a list of MTG colors to a number, such that an ordering of the numbers is equivalent to a particular color ordering.
 
-The color ordering is defined as follows:
+  The color ordering is defined as follows:
 
-1. A card with N + 1 colors is always considered greater than a card
-   with N colors.
-2. Cards with multiple colors are sorted first by the first color,
-   then by the second color, etc.
-3. Colors are ordered as Colorless < White < Blue < Black < Red < Green.
-"
+  1. A card with N + 1 colors is always considered greater than a card
+  with N colors.
+  2. Cards with multiple colors are sorted first by the first color,
+  then by the second color, etc.
+  3. Colors are ordered as Colorless < White < Blue < Black < Red < Green.
+  "
   (if (null color-list)
       accum
     (let ((c (car color-list)))
@@ -431,10 +459,10 @@ The color ordering is defined as follows:
 (defun mtg/table-sort-by-property (property arg)
   "If point is at an org-table and the current column contains MTG card links, sort the org-table at point according to property PROPERTY of those cards.
 
-For more on properties, see #'mtg/get-property.
+  For more on properties, see #'mtg/get-property.
 
-If a prefix arg is provided, sort in reverse order.
-"
+  If a prefix arg is provided, sort in reverse order.
+  "
   (interactive (list (mtg/prompt-for-property)
                      current-prefix-arg))
   (org-table-sort-lines
